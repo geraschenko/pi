@@ -5,9 +5,9 @@
  * Responses and events are emitted as JSON lines on stdout.
  */
 
-import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model } from "@earendil-works/pi-ai";
-import type { SessionStats } from "../../core/agent-session.ts";
+import type { AgentSessionEvent, SessionStats } from "../../core/agent-session.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
@@ -279,3 +279,83 @@ export type RpcExtensionUIResponse =
 // ============================================================================
 
 export type RpcCommandType = RpcCommand["type"];
+
+// ============================================================================
+// RPC Socket records and events (Unix socket transport)
+// ============================================================================
+
+export type RpcSocketUiWaitMethod = "select" | "confirm" | "input" | "editor" | "custom";
+
+export type RpcSocketUiWaitResolution =
+	| "selected"
+	| "confirmed"
+	| "submitted"
+	| "cancelled"
+	| "timed_out"
+	| "aborted"
+	| "closed";
+
+export interface RpcSocketHelloRecord {
+	type: "hello";
+	protocol: "pi-rpc-socket";
+	version: 1;
+}
+
+export interface RpcSocketShutdownRecord {
+	type: "shutdown";
+}
+
+export interface RpcSocketUiWaitStartEvent {
+	type: "ui_wait_start";
+	requestId: string;
+	request: {
+		method: RpcSocketUiWaitMethod;
+		title?: string;
+		message?: string;
+		optionCount?: number;
+	};
+}
+
+export interface RpcSocketUiWaitEndEvent {
+	type: "ui_wait_end";
+	requestId: string;
+	request: {
+		method: RpcSocketUiWaitMethod;
+		title?: string;
+	};
+	resolution: RpcSocketUiWaitResolution;
+}
+
+/**
+ * Identifies the session this process is hosting. Sent to each client right
+ * after the hello record, and broadcast whenever the active session is
+ * replaced (/new, /resume, fork, clone, import). `sessionFile` is omitted for
+ * in-memory sessions.
+ */
+export interface RpcSocketSessionChangedEvent {
+	type: "session_changed";
+	sessionFile?: string;
+	sessionId: string;
+}
+
+export interface RpcExtensionErrorEvent {
+	type: "extension_error";
+	extensionPath: string;
+	event: string;
+	error: string;
+}
+
+export type RpcSocketSideChannelEvent =
+	| RpcSocketUiWaitStartEvent
+	| RpcSocketUiWaitEndEvent
+	| RpcSocketSessionChangedEvent
+	| RpcExtensionErrorEvent;
+
+export type RpcSocketBroadcastEvent = AgentEvent | AgentSessionEvent | RpcSocketSideChannelEvent;
+
+export type RpcSocketRecord =
+	| RpcSocketHelloRecord
+	| RpcSocketShutdownRecord
+	| RpcResponse
+	| RpcExtensionUIRequest
+	| RpcSocketBroadcastEvent;
