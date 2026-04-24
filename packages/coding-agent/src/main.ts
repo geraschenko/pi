@@ -42,7 +42,7 @@ import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
-import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
+import { InteractiveMode, runPrintMode, runRpcMode, runRpcSocketServer } from "./modes/index.ts";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
@@ -115,6 +115,28 @@ function toPrintOutputMode(appMode: AppMode): Exclude<Mode, "rpc"> {
 
 function isPlainRuntimeMetadataCommand(parsed: Args): boolean {
 	return !parsed.print && parsed.mode === undefined && (parsed.help === true || parsed.listModels !== undefined);
+}
+
+function validateRpcSocketFlags(parsed: Args, stdinIsTTY: boolean, stdoutIsTTY: boolean): void {
+	if (!parsed.rpcSocket) {
+		return;
+	}
+
+	const conflictingFlags = [
+		parsed.mode === "rpc" ? "--mode rpc" : undefined,
+		parsed.mode === "json" ? "--mode json" : undefined,
+		parsed.print ? "--print" : undefined,
+	].filter((flag): flag is string => flag !== undefined);
+
+	if (conflictingFlags.length > 0) {
+		console.error(chalk.red(`Error: --rpc-socket cannot be combined with ${conflictingFlags.join(", ")}`));
+		process.exit(1);
+	}
+
+	if (!stdinIsTTY || !stdoutIsTTY) {
+		console.error(chalk.red("Error: --rpc-socket requires interactive TTY stdin and stdout"));
+		process.exit(1);
+	}
 }
 
 async function prepareInitialMessage(
@@ -535,6 +557,7 @@ export async function main(args: string[], options?: MainOptions) {
 		process.exit(0);
 	}
 
+	validateRpcSocketFlags(parsed, process.stdin.isTTY, process.stdout.isTTY);
 	let appMode = resolveAppMode(parsed, process.stdin.isTTY, process.stdout.isTTY);
 	const shouldTakeOverStdout = appMode !== "interactive" && !isPlainRuntimeMetadataCommand(parsed);
 	if (shouldTakeOverStdout) {
@@ -810,6 +833,19 @@ export async function main(args: string[], options?: MainOptions) {
 		printTimings();
 		await runRpcMode(runtime);
 	} else if (appMode === "interactive") {
+		let rpcSocketServer: Awaited<ReturnType<typeof runRpcSocketServer>> | undefined;
+		if (parsed.rpcSocket) {
+			try {
+				rpcSocketServer = await runRpcSocketServer(runtime, {
+					socketPath: parsed.rpcSocket,
+				});
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error(chalk.red(`Error: ${message}`));
+				process.exit(1);
+			}
+		}
+
 		const interactiveMode = new InteractiveMode(runtime, {
 			migratedProviders,
 			modelFallbackMessage,
@@ -818,6 +854,12 @@ export async function main(args: string[], options?: MainOptions) {
 			initialImages,
 			initialMessages: parsed.messages,
 			verbose: parsed.verbose,
+			sideChannelEventSink: rpcSocketServer
+				? (event) => {
+						rpcSocketServer.broadcastEvent(event);
+					}
+				: undefined,
+			beforeShutdown: rpcSocketServer ? () => rpcSocketServer.closeGracefully() : undefined,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();
@@ -826,6 +868,7 @@ export async function main(args: string[], options?: MainOptions) {
 			// (Kitty keyboard protocol, device attributes, cell size) before restoring the terminal.
 			await new Promise((resolve) => setTimeout(resolve, 150));
 			interactiveMode.stop();
+			await rpcSocketServer?.closeGracefully();
 			stopThemeWatcher();
 			printTimings();
 			if (process.stdout.writableLength > 0) {
