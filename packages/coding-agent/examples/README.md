@@ -31,6 +31,10 @@ Example extensions demonstrating:
 ### [plugins/pi-example-plugin/](plugins/pi-example-plugin/)
 An experimental plugin package that Pi automatically builds into separate Session-worker and TUI Chord facets.
 
+## Standalone examples
+
+- [rpc-socket-tee.ts](rpc-socket-tee.ts) - connect to `pi --rpc-socket`, print all records, and inject a steer when a user message contains `chilidog`
+
 ## Documentation
 
 - [SDK Examples](sdk/README.md)

@@ -24,6 +24,7 @@ type ShutdownThis = {
 	themeController: { disableAutoSync: () => void };
 	stop: () => void;
 	sessionManager: SessionManager;
+	options: { beforeShutdown?: () => Promise<void> };
 };
 
 type InteractiveModePrototypeWithShutdown = {
@@ -87,6 +88,7 @@ function createContext(order: string[], sessionManager = createSessionManager())
 			order.push("stop");
 		}),
 		sessionManager,
+		options: {},
 	};
 }
 
