@@ -1602,13 +1602,10 @@ export class InteractiveMode {
 						return { cancelled: true };
 					}
 
-					this.chatContainer.clear();
-					this.renderInitialMessages();
 					if (result.editorText && !this.editor.getText().trim()) {
 						this.editor.setText(result.editorText);
 					}
 					this.showStatus("Navigated to selected point");
-					void this.flushCompactionQueue({ willRetry: false });
 					return { cancelled: false };
 				},
 				switchSession: async (sessionPath, options) => {
@@ -2833,8 +2830,24 @@ export class InteractiveMode {
 
 	private subscribeToAgent(): void {
 		this.unsubscribe = this.session.subscribe(async (event) => {
+			// tree_navigated is emitted synchronously inside navigateTree; the
+			// re-render must run before code following `await navigateTree(...)`,
+			// so handle it here synchronously instead of through async handleEvent.
+			if (event.type === "tree_navigated") {
+				if (this.isInitialized) {
+					this.handleTreeNavigated();
+				}
+				return;
+			}
 			await this.handleEvent(event);
 		});
+	}
+
+	private handleTreeNavigated(): void {
+		this.chatContainer.clear();
+		this.renderInitialMessages();
+		this.ui.requestRender();
+		void this.flushCompactionQueue({ willRetry: false });
 	}
 
 	private async handleEvent(event: AgentSessionEvent): Promise<void> {
@@ -4643,14 +4656,10 @@ export class InteractiveMode {
 							return;
 						}
 
-						// Update UI
-						this.chatContainer.clear();
-						this.renderInitialMessages();
 						if (result.editorText && !this.editor.getText().trim()) {
 							this.editor.setText(result.editorText);
 						}
 						this.showStatus("Navigated to selected point");
-						void this.flushCompactionQueue({ willRetry: false });
 					} catch (error) {
 						this.showError(error instanceof Error ? error.message : String(error));
 					} finally {
