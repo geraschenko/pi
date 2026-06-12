@@ -39,6 +39,12 @@ Key differences from `--mode rpc`:
 
 The command set and normal session event payloads otherwise match `--mode rpc` as closely as possible.
 
+## Image inputs
+
+`prompt`, `steer`, and `follow_up` accept an optional `images` array of `ImageContent` objects: `{"type":"image","data":"base64-encoded-data","mimeType":"image/png"}`.
+
+Images use upstream's shared conversion and resize pipeline. A supported client-supplied `mimeType` (png, jpeg, gif, webp) is trusted, not sniffed from the bytes. Other MIME types trigger an attempted conversion to PNG. Resizing honors the user's auto-resize setting (on by default); resized images receive an indexed dimension note. Conversion or resize failures drop the image and append an indexed omission note; they do not reject the command. With auto-resize disabled, bytes labeled with a supported MIME type pass through without decoding or validation. Clients must supply the correct MIME type and valid image bytes.
+
 ## Tree navigation
 
 ### navigate_tree

@@ -113,11 +113,11 @@ export async function resizeImage(
  * Format a dimension note for resized images.
  * This helps the model understand the coordinate mapping.
  */
-export function formatDimensionNote(result: ResizedImage): string | undefined {
+export function formatDimensionNote(result: ResizedImage, label = "Image"): string | undefined {
 	if (!result.wasResized) {
 		return undefined;
 	}
 
 	const scale = result.originalWidth / result.width;
-	return `[Image: original ${result.originalWidth}x${result.originalHeight}, displayed at ${result.width}x${result.height}. Multiply coordinates by ${scale.toFixed(2)} to map to original image.]`;
+	return `[${label}: original ${result.originalWidth}x${result.originalHeight}, displayed at ${result.width}x${result.height}. Multiply coordinates by ${scale.toFixed(2)} to map to original image.]`;
 }
