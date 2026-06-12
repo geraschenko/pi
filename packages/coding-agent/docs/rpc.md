@@ -39,6 +39,58 @@ Key differences from `--mode rpc`:
 
 The command set and normal session event payloads otherwise match `--mode rpc` as closely as possible.
 
+## Tree navigation
+
+### navigate_tree
+
+Move the tip of the active branch to another entry in the session tree — the RPC equivalent of the interactive `/tree` command. Unlike `fork`/`clone`, this stays in the same session file and keeps the same session id. Any entry id from `get_entries` or `get_tree` is a valid target.
+
+```json
+{"type": "navigate_tree", "targetId": "abc123"}
+```
+
+With branch summarization of the abandoned branch:
+```json
+{"type": "navigate_tree", "targetId": "abc123", "summarize": true, "customInstructions": "Focus on decisions made", "replaceInstructions": false, "label": "before refactor"}
+```
+
+All options besides `targetId` are optional:
+- `summarize`: Append a branch summary entry of the abandoned branch at the target position
+- `customInstructions`: Extra instructions for the summarizer
+- `replaceInstructions`: If `true`, `customInstructions` replaces the default summarizer prompt instead of supplementing it
+- `label`: Label to attach to the summary entry (or the target entry when not summarizing)
+
+Target semantics: navigating to a user message (or `custom_message`) rewinds to just *before* it — the new leaf is the entry's parent and the message text is returned as `editorText` so it can be edited and re-sent. Navigating to any other entry makes that entry the new leaf. Navigating to the current leaf is a no-op.
+
+Response:
+```json
+{
+  "type": "response",
+  "command": "navigate_tree",
+  "success": true,
+  "data": {"editorText": "The original prompt text...", "cancelled": false}
+}
+```
+
+`data` may also include `summaryEntry` (the appended branch summary entry, when summarizing) and `aborted: true` (when summarization was aborted; `cancelled` is also `true`). `cancelled: true` without `aborted` means a `session_before_tree` extension handler cancelled the navigation.
+
+Navigation fails with a `success: false` response while a response is streaming or compaction is running. On success, a `tree_navigated` event is emitted to all subscribers.
+
+### tree_navigated
+
+Emitted when the tip of the active branch moves within the session tree — whether triggered by the `navigate_tree` command, the interactive `/tree` command, or an extension. The session id and file are unchanged.
+
+```json
+{
+  "type": "tree_navigated",
+  "oldLeafId": "def456",
+  "newLeafId": "abc123",
+  "summaryEntry": {"type": "branch_summary", "id": "ghi789", "summary": "...", "...": "..."}
+}
+```
+
+`oldLeafId` and `newLeafId` are `null` for the root position. `summaryEntry` is present only when the navigation appended a branch summary; its `fromHook` field records whether the summary text came from an extension's `session_before_tree` handler. After this event, clients holding cached messages should refetch (`get_messages` or `get_entries`) — the agent's context has been rebuilt from the new leaf.
+
 ## Protocol records
 
 The protocol has four record families:
