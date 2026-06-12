@@ -7,7 +7,7 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import chalk from "chalk";
 import { resolve } from "path";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
-import { formatDimensionNote, resizeImage } from "../utils/image-resize.ts";
+import { prepareImageAttachment } from "../utils/image-attachment.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
 
 export interface ProcessedFiles {
@@ -45,53 +45,29 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 			continue;
 		}
 
+		let content: Buffer;
+		try {
+			content = await readFile(absolutePath);
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+			process.exit(1);
+		}
+
 		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
-
 		if (mimeType) {
-			// Handle image file
-			const content = await readFile(absolutePath);
-
-			let attachment: ImageContent;
-			let dimensionNote: string | undefined;
-
-			if (autoResizeImages) {
-				const resized = await resizeImage(content, mimeType);
-				if (!resized) {
-					text += `<file name="${absolutePath}">[Image omitted: could not be resized below the inline image size limit.]</file>\n`;
-					continue;
-				}
-				dimensionNote = formatDimensionNote(resized);
-				attachment = {
-					type: "image",
-					mimeType: resized.mimeType,
-					data: resized.data,
-				};
+			const prepared = await prepareImageAttachment(content, { autoResize: autoResizeImages, mimeType });
+			if (prepared.status === "ok") {
+				images.push(prepared.image);
+				text += prepared.note
+					? `<file name="${absolutePath}">${prepared.note}</file>\n`
+					: `<file name="${absolutePath}"></file>\n`;
 			} else {
-				attachment = {
-					type: "image",
-					mimeType,
-					data: content.toString("base64"),
-				};
-			}
-
-			images.push(attachment);
-
-			// Add text reference to image with optional dimension note
-			if (dimensionNote) {
-				text += `<file name="${absolutePath}">${dimensionNote}</file>\n`;
-			} else {
-				text += `<file name="${absolutePath}"></file>\n`;
+				text += `<file name="${absolutePath}">${prepared.note}</file>\n`;
 			}
 		} else {
-			// Handle text file
-			try {
-				const content = await readFile(absolutePath, "utf-8");
-				text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
-			} catch (error: unknown) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
-				process.exit(1);
-			}
+			// Not a supported image: treat as a text file
+			text += `<file name="${absolutePath}">\n${content.toString("utf-8")}\n</file>\n`;
 		}
 	}
 

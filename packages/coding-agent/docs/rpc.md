@@ -97,6 +97,8 @@ Response:
 
 The `images` field is optional. Each image uses `ImageContent` format: `{"type": "image", "data": "base64-encoded-data", "mimeType": "image/png"}`.
 
+Images go through the same pipeline as CLI file arguments: the actual mime type is sniffed from the decoded bytes (the `mimeType` field is advisory — the sniffed type wins). Resizing honors the user's auto-resize setting (on by default): when enabled, images are resized to fit the inline size limits and a dimension note is appended to the message so the model can map coordinates back to the original; when disabled, the original bytes are sent unchanged. An image that is not a supported format (png, jpeg, gif, webp) or — with auto-resize on — cannot be brought under the size limit is dropped and replaced by an indexed text note appended to the message (e.g. `[Image 1 omitted: not a supported image format (png, jpeg, gif, webp).]`); the command still succeeds.
+
 #### steer
 
 Queue a steering message while the agent is running. It is delivered after the current assistant turn finishes executing its tool calls, before the next LLM call. Skill commands and prompt templates are expanded. Extension commands are not allowed (use `prompt` instead).
@@ -110,7 +112,7 @@ With images:
 {"type": "steer", "message": "Look at this instead", "images": [{"type": "image", "data": "base64-encoded-data", "mimeType": "image/png"}]}
 ```
 
-The `images` field is optional. Each image uses `ImageContent` format (same as `prompt`).
+The `images` field is optional. Each image uses `ImageContent` format and goes through the same sniff/resize pipeline as `prompt`.
 
 Response:
 ```json
@@ -132,7 +134,7 @@ With images:
 {"type": "follow_up", "message": "Also check this image", "images": [{"type": "image", "data": "base64-encoded-data", "mimeType": "image/png"}]}
 ```
 
-The `images` field is optional. Each image uses `ImageContent` format (same as `prompt`).
+The `images` field is optional. Each image uses `ImageContent` format and goes through the same sniff/resize pipeline as `prompt`.
 
 Response:
 ```json
