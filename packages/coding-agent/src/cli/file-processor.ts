@@ -46,11 +46,18 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 			continue;
 		}
 
-		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
+		let content: Buffer;
+		try {
+			content = await readFile(absolutePath);
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+			process.exit(1);
+		}
 
+		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
 		if (mimeType) {
 			// Handle image file
-			const content = await readFile(absolutePath);
 			const processed = await processImage(content, mimeType, { autoResizeImages });
 
 			if (!processed.ok) {
@@ -58,12 +65,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 				continue;
 			}
 
-			const attachment: ImageContent = {
-				type: "image",
-				mimeType: processed.mimeType,
-				data: processed.data,
-			};
-			images.push(attachment);
+			images.push({ type: "image", mimeType: processed.mimeType, data: processed.data });
 
 			// Add text reference to image with optional processing hints
 			if (processed.hints.length > 0) {
@@ -72,15 +74,8 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 				text += `<file name="${absolutePath}"></file>\n`;
 			}
 		} else {
-			// Handle text file
-			try {
-				const content = stripBom(await readFile(absolutePath, "utf-8"));
-				text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
-			} catch (error: unknown) {
-				const message = error instanceof Error ? error.message : String(error);
-				console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
-				process.exit(1);
-			}
+			// Not a supported image: treat as a text file
+			text += `<file name="${absolutePath}">\n${stripBom(content.toString("utf-8"))}\n</file>\n`;
 		}
 	}
 

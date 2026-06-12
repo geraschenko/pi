@@ -252,7 +252,8 @@ export function createReadToolDefinition(
 							let details: ReadToolDetails | undefined;
 							const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
 							if (mimeType) {
-								// Read image as binary.
+								// Read image as binary. The mime type is already classified via the
+								// pluggable operations, so pass it through to skip the byte sniff.
 								const buffer = await ops.readFile(absolutePath);
 								const processed = await processImage(buffer, mimeType, { autoResizeImages });
 								if (!processed.ok) {
