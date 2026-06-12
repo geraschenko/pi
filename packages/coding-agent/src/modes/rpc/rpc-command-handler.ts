@@ -219,6 +219,16 @@ export async function executeRpcCommand(options: ExecuteRpcCommandOptions): Prom
 			return rpcSuccess(id, "get_tree", { tree: sessionManager.getTree(), leafId: sessionManager.getLeafId() });
 		}
 
+		case "navigate_tree": {
+			const result = await session.navigateTree(command.targetId, {
+				summarize: command.summarize,
+				customInstructions: command.customInstructions,
+				replaceInstructions: command.replaceInstructions,
+				label: command.label,
+			});
+			return rpcSuccess(id, "navigate_tree", result);
+		}
+
 		case "get_last_assistant_text": {
 			const text = session.getLastAssistantText();
 			return rpcSuccess(id, "get_last_assistant_text", { text });
