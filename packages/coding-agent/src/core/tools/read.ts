@@ -8,7 +8,7 @@ import { type Static, Type } from "typebox";
 import { getReadmePath } from "../../config.ts";
 import { keyHint, keyText } from "../../modes/interactive/components/keybinding-hints.ts";
 import { getLanguageFromPath, highlightCode, type Theme } from "../../modes/interactive/theme/theme.ts";
-import { formatDimensionNote, resizeImage } from "../../utils/image-resize.ts";
+import { prepareImageAttachment } from "../../utils/image-attachment.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../utils/paths.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
@@ -245,33 +245,25 @@ export function createReadToolDefinition(
 							let details: ReadToolDetails | undefined;
 							const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
 							if (mimeType) {
-								// Read image as binary.
+								// Read image as binary. The mime type is already classified via the
+								// pluggable operations, so pass it through to skip the byte sniff.
 								const buffer = await ops.readFile(absolutePath);
-								if (autoResizeImages) {
-									// Resize image if needed before sending it back to the model.
-									const resized = await resizeImage(buffer, mimeType);
-									if (!resized) {
-										let textNote = `Read image file [${mimeType}]\n[Image omitted: could not be resized below the inline image size limit.]`;
-										if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-										content = [{ type: "text", text: textNote }];
-									} else {
-										const dimensionNote = formatDimensionNote(resized);
-										let textNote = `Read image file [${resized.mimeType}]`;
-										if (dimensionNote) textNote += `\n${dimensionNote}`;
-										if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-										content = [
-											{ type: "text", text: textNote },
-											{ type: "image", data: resized.data, mimeType: resized.mimeType },
-										];
-									}
-								} else {
-									let textNote = `Read image file [${mimeType}]`;
-									if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-									content = [
-										{ type: "text", text: textNote },
-										{ type: "image", data: buffer.toString("base64"), mimeType },
-									];
+								const prepared = await prepareImageAttachment(buffer, {
+									autoResize: autoResizeImages,
+									mimeType,
+								});
+								if (prepared.status === "unsupported") {
+									// Unreachable: ops.detectImageMimeType already classified this as an
+									// image, and a passed-in mimeType bypasses the content sniff.
+									throw new Error(`read: image classification disagreed with content for ${absolutePath}`);
 								}
+								let textNote = `Read image file [${prepared.mimeType}]`;
+								if (prepared.note) textNote += `\n${prepared.note}`;
+								if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
+								content =
+									prepared.status === "ok"
+										? [{ type: "text", text: textNote }, prepared.image]
+										: [{ type: "text", text: textNote }];
 							} else {
 								// Read text content.
 								const buffer = await ops.readFile(absolutePath);

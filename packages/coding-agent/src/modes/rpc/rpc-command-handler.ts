@@ -1,5 +1,57 @@
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
+import { prepareImageAttachment } from "../../utils/image-attachment.ts";
 import type { RpcCommand, RpcResponse, RpcSessionState, RpcSlashCommand } from "./rpc-types.ts";
+
+export interface RpcMessageWithImages {
+	message: string;
+	images: ImageContent[] | undefined;
+}
+
+/**
+ * Run RPC-supplied images through the same sniff + resize pipeline as CLI file
+ * arguments (`prepareImageAttachment`), so a session never contains an image
+ * that did not pass it. The mime type is sniffed from the decoded bytes (the
+ * client-supplied `mimeType` is advisory) and resizing honors the user's
+ * auto-resize setting, exactly as file arguments do. Images that are not a
+ * supported format or cannot be resized under the inline size limit are dropped
+ * and replaced by an indexed text note appended to the message — surfacing the
+ * failure in the dialogue instead of erroring.
+ */
+export async function processRpcImages(
+	message: string,
+	images: ImageContent[] | undefined,
+	options: { autoResize: boolean },
+): Promise<RpcMessageWithImages> {
+	if (!images || images.length === 0) {
+		return { message, images };
+	}
+
+	const processedImages: ImageContent[] = [];
+	const notes: string[] = [];
+
+	for (const [index, image] of images.entries()) {
+		const bytes = Buffer.from(image.data, "base64");
+		const prepared = await prepareImageAttachment(bytes, {
+			autoResize: options.autoResize,
+			label: `Image ${index + 1}`,
+		});
+		if (prepared.status === "ok") {
+			if (prepared.note) {
+				notes.push(prepared.note);
+			}
+			processedImages.push(prepared.image);
+		} else {
+			notes.push(prepared.note);
+		}
+	}
+
+	if (notes.length > 0) {
+		const noteBlock = notes.join("\n");
+		message = message ? `${message}\n\n${noteBlock}` : noteBlock;
+	}
+	return { message, images: processedImages.length > 0 ? processedImages : undefined };
+}
 
 export function rpcSuccess<T extends RpcCommand["type"]>(
 	id: string | undefined,
@@ -29,10 +81,13 @@ export async function executeRpcCommand(options: ExecuteRpcCommandOptions): Prom
 
 	switch (command.type) {
 		case "prompt": {
+			const { message, images } = await processRpcImages(command.message, command.images, {
+				autoResize: session.settingsManager.getImageAutoResize(),
+			});
 			let preflightSucceeded = false;
 			void session
-				.prompt(command.message, {
-					images: command.images,
+				.prompt(message, {
+					images,
 					streamingBehavior: command.streamingBehavior,
 					source: "rpc",
 					preflightResult: (didSucceed) => {
@@ -51,12 +106,18 @@ export async function executeRpcCommand(options: ExecuteRpcCommandOptions): Prom
 		}
 
 		case "steer": {
-			await session.steer(command.message, command.images);
+			const { message, images } = await processRpcImages(command.message, command.images, {
+				autoResize: session.settingsManager.getImageAutoResize(),
+			});
+			await session.steer(message, images);
 			return rpcSuccess(id, "steer");
 		}
 
 		case "follow_up": {
-			await session.followUp(command.message, command.images);
+			const { message, images } = await processRpcImages(command.message, command.images, {
+				autoResize: session.settingsManager.getImageAutoResize(),
+			});
+			await session.followUp(message, images);
 			return rpcSuccess(id, "follow_up");
 		}
 
