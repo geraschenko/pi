@@ -739,6 +739,41 @@ Response:
 }
 ```
 
+#### navigate_tree
+
+Move the tip of the active branch to another entry in the session tree — the RPC equivalent of the interactive `/tree` command. Unlike `fork`/`clone`, this stays in the same session file and keeps the same session id. Any entry id from `get_entries` or `get_tree` is a valid target.
+
+```json
+{"type": "navigate_tree", "targetId": "abc123"}
+```
+
+With branch summarization of the abandoned branch:
+```json
+{"type": "navigate_tree", "targetId": "abc123", "summarize": true, "customInstructions": "Focus on decisions made", "replaceInstructions": false, "label": "before refactor"}
+```
+
+All options besides `targetId` are optional:
+- `summarize`: Append a branch summary entry of the abandoned branch at the target position
+- `customInstructions`: Extra instructions for the summarizer
+- `replaceInstructions`: If `true`, `customInstructions` replaces the default summarizer prompt instead of supplementing it
+- `label`: Label to attach to the summary entry (or the target entry when not summarizing)
+
+Target semantics: navigating to a user message (or `custom_message`) rewinds to just *before* it — the new leaf is the entry's parent and the message text is returned as `editorText` so it can be edited and re-sent. Navigating to any other entry makes that entry the new leaf. Navigating to the current leaf is a no-op.
+
+Response:
+```json
+{
+  "type": "response",
+  "command": "navigate_tree",
+  "success": true,
+  "data": {"editorText": "The original prompt text...", "cancelled": false}
+}
+```
+
+`data` may also include `summaryEntry` (the appended branch summary entry, when summarizing) and `aborted: true` (when summarization was aborted; `cancelled` is also `true`). `cancelled: true` without `aborted` means a `session_before_tree` extension handler cancelled the navigation.
+
+Navigation fails with a `success: false` response while a response is streaming or compaction is running. On success, a `tree_navigated` event is emitted to all subscribers.
+
 #### get_last_assistant_text
 
 Get the text content of the last assistant message.
@@ -840,6 +875,7 @@ Events are streamed to stdout as JSON lines during agent operation. Events do NO
 | `queue_update` | Pending steering/follow-up queue changed |
 | `compaction_start` | Compaction begins |
 | `compaction_end` | Compaction completes |
+| `tree_navigated` | Active branch tip moved within the session tree |
 | `auto_retry_start` | Auto-retry begins (after transient error) |
 | `auto_retry_end` | Auto-retry completes (success or final failure) |
 | `extension_error` | Extension threw an error |
@@ -1018,6 +1054,21 @@ If `reason` was `"overflow"` and compaction succeeds, `willRetry` is `true` and 
 If compaction was aborted, `result` is `null` and `aborted` is `true`.
 
 If compaction failed (e.g., API quota exceeded), `result` is `null`, `aborted` is `false`, and `errorMessage` contains the error description.
+
+### tree_navigated
+
+Emitted when the tip of the active branch moves within the session tree — whether triggered by the `navigate_tree` command, the interactive `/tree` command, or an extension. The session id and file are unchanged.
+
+```json
+{
+  "type": "tree_navigated",
+  "oldLeafId": "def456",
+  "newLeafId": "abc123",
+  "summaryEntry": {"type": "branch_summary", "id": "ghi789", "summary": "...", "...": "..."}
+}
+```
+
+`oldLeafId` and `newLeafId` are `null` for the root position. `summaryEntry` is present only when the navigation appended a branch summary; its `fromHook` field records whether the summary text came from an extension's `session_before_tree` handler. After this event, clients holding cached messages should refetch (`get_messages` or `get_entries`) — the agent's context has been rebuilt from the new leaf.
 
 ### auto_retry_start / auto_retry_end
 
