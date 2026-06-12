@@ -158,9 +158,12 @@ All normal session events emitted today by `session.subscribe(...)` remain visib
 - `queue_update`
 - `compaction_start`
 - `compaction_end`
+- `tree_navigated`
 - `auto_retry_start`
 - `auto_retry_end`
 - `extension_error`
+
+`tree_navigated` is broadcast whenever the tip of the active branch moves within the current session (`navigate_tree` over the socket, `/tree` in the TUI, or an extension). It does **not** interact with `session_changed`: tree navigation keeps the same session id and file, so no `session_changed` is emitted for it.
 
 ### Documented deviations from `--mode rpc`
 

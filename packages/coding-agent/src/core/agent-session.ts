@@ -135,6 +135,12 @@ export type AgentSessionEvent =
 			followUp: readonly string[];
 	  }
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+	| {
+			type: "tree_navigated";
+			oldLeafId: string | null;
+			newLeafId: string | null;
+			summaryEntry?: BranchSummaryEntry;
+	  }
 	| { type: "session_info_changed"; name: string | undefined }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
 	| {
@@ -2714,6 +2720,13 @@ export class AgentSession {
 		targetId: string,
 		options: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string } = {},
 	): Promise<{ editorText?: string; cancelled: boolean; aborted?: boolean; summaryEntry?: BranchSummaryEntry }> {
+		// Navigation rewrites agent state in place; a concurrent stream or
+		// compaction would be rewriting it too. This runs before we set our own
+		// branch summary abort controller, so it doesn't block itself.
+		if (this.isStreaming || this.isCompacting) {
+			throw new Error("Cannot navigate the session tree while streaming or compacting");
+		}
+
 		const oldLeafId = this.sessionManager.getLeafId();
 
 		// No-op if already at target
@@ -2890,7 +2903,14 @@ export class AgentSession {
 				fromExtension: summaryText ? fromExtension : undefined,
 			});
 
-			// Emit to custom tools
+			// Synchronous emit: subscribers (e.g. the TUI re-render) run before
+			// navigateTree returns, so callers see a consistent view after awaiting.
+			this._emit({
+				type: "tree_navigated",
+				oldLeafId,
+				newLeafId: this.sessionManager.getLeafId(),
+				summaryEntry,
+			});
 
 			return { editorText, cancelled: false, summaryEntry };
 		} finally {
