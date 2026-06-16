@@ -1,12 +1,12 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
-	"version": "0.80.2",
+	"name": "@geraschenko/pi-coding-agent",
+	"version": "0.80.2-fork.1",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
-			"name": "@earendil-works/pi-coding-agent",
-			"version": "0.80.2",
+			"name": "@geraschenko/pi-coding-agent",
+			"version": "0.80.2-fork.1",
 			"license": "MIT",
 			"dependencies": {
 				"@earendil-works/pi-agent-core": "^0.80.2",

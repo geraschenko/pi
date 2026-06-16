@@ -1,6 +1,6 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
-	"version": "0.80.2",
+	"name": "@geraschenko/pi-coding-agent",
+	"version": "0.80.2-fork.1",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
@@ -88,7 +88,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/geraschenko/pi.git",
 		"directory": "packages/coding-agent"
 	},
 	"engines": {
