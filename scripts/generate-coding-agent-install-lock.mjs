@@ -136,14 +136,14 @@ function isExactVersionSpec(spec) {
 	return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(spec);
 }
 
-function getInternalWorkspaces(lockPackages) {
+function getInternalWorkspaces(lockPackages, codingAgentPackageName) {
 	const workspaces = new Map();
 
 	for (const [lockPath, entry] of Object.entries(lockPackages)) {
 		if (!lockPath.startsWith("packages/") || lockPath.includes("/node_modules/") || !entry.name || !entry.version) {
 			continue;
 		}
-		if (!entry.name.startsWith(internalPackagePrefix)) {
+		if (!entry.name.startsWith(internalPackagePrefix) && entry.name !== codingAgentPackageName) {
 			continue;
 		}
 
@@ -259,7 +259,12 @@ function createRootLockEntry(installerPackageJson) {
 	return sortedPackageEntry(entry);
 }
 
-function validateGeneratedFiles(installerPackageJson, installLock, internalNames) {
+function getInternalPackageVersion(codingAgentPackage) {
+	const forkMatch = codingAgentPackage.version.match(/^(\d+\.\d+\.\d+)-fork\.\d+$/);
+	return forkMatch?.[1] ?? codingAgentPackage.version;
+}
+
+function validateGeneratedFiles(installerPackageJson, installLock, internalNames, internalPackageVersion) {
 	const errors = [];
 	const rootEntry = installLock.packages[""];
 	const includedPackageNames = new Set();
@@ -294,8 +299,8 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		if (packageName?.startsWith(internalPackagePrefix) && entry.version !== installerPackageJson.version) {
-			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
+		if (packageName?.startsWith(internalPackagePrefix) && entry.version !== internalPackageVersion) {
+			errors.push(`${lockPath} internal package version ${entry.version} does not match ${internalPackageVersion}`);
 		}
 		if (entry.hasInstallScript) {
 			if (!packageName || !entry.version) {
@@ -364,7 +369,8 @@ function generateInstallLock() {
 	const lockPackages = rootLock.packages;
 	const codingAgentPackage = readJson(join(codingAgentDir, "package.json"));
 	const installerPackageJson = createInstallerPackageJson(codingAgentPackage);
-	const internalWorkspaces = getInternalWorkspaces(lockPackages);
+	const internalPackageVersion = getInternalPackageVersion(codingAgentPackage);
+	const internalWorkspaces = getInternalWorkspaces(lockPackages, codingAgentPackage.name);
 	const installLockPackages = {
 		"": createRootLockEntry(installerPackageJson),
 	};
@@ -399,7 +405,7 @@ function generateInstallLock() {
 		packages: sortedObject(installLockPackages),
 	};
 
-	validateGeneratedFiles(installerPackageJson, installLock, internalNames);
+	validateGeneratedFiles(installerPackageJson, installLock, internalNames, internalPackageVersion);
 	return { installerPackageJson, installLock };
 }
 
