@@ -1,3 +1,14 @@
+> [!IMPORTANT]
+> This package is an unofficial fork of [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
+> You probably want the original package instead:
+>
+> ```sh
+> npm install -g @earendil-works/pi-coding-agent
+> ```
+>
+> This fork exists only to provide changes needed by downstream projects that depend on `@geraschenko/pi-coding-agent`.
+---
+
 <p align="center">
   <a href="https://pi.dev">
     <img alt="pi logo" src="https://pi.dev/logo-auto.svg" width="128">
