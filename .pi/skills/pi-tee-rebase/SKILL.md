@@ -54,6 +54,11 @@ The branch is expected to touch these areas:
   - `packages/coding-agent/docs/rpc.md`
   - `packages/coding-agent/examples/README.md`
   - `packages/coding-agent/examples/rpc-socket-tee.ts`
+- final fork packaging commit
+  - `packages/coding-agent/package.json`
+  - `packages/coding-agent/npm-shrinkwrap.json`
+  - `package-lock.json`
+  - `.pi/skills/publish-pi-coding-agent-fork/`
 
 Treat conflicts outside this surface as suspicious and explain them before editing.
 
@@ -96,6 +101,21 @@ git add <resolved-files>
 ```
 
 8. Report status and remind the user to run `git rebase --continue` themselves unless they asked you to do it.
+
+## Final fork packaging commit conflicts
+
+The last fork-only commit may conflict with upstream release metadata. For `packages/coding-agent/package.json`, keep upstream package contents and dependency versions, then reapply only the fork identity:
+
+- `name`: `@geraschenko/pi-coding-agent`
+- `version`: `<current-upstream-version>-fork.N`
+
+Do not hand-merge large generated metadata conflicts. For `package-lock.json` and `packages/coding-agent/npm-shrinkwrap.json`, resolve enough to continue by taking upstream as the temporary base, update `package.json`, then regenerate using the publish skill script after the rebase:
+
+```bash
+.pi/skills/publish-pi-coding-agent-fork/verify-before-publish.sh
+```
+
+Before publishing, verify the package name spelling exactly: `@geraschenko/pi-coding-agent`.
 
 ## Typical `main.ts` conflict pattern
 
