@@ -340,8 +340,11 @@ export interface ExtensionCommandContext extends ExtensionContext {
 	/** Get the current base system-prompt construction options. */
 	getSystemPromptOptions(): BuildSystemPromptOptions;
 
-	/** Wait for the agent to finish streaming */
+	/** Wait for the agent to finish streaming (a single run). */
 	waitForIdle(): Promise<void>;
+
+	/** Wait until no session driver is active: not streaming, retrying, compacting, or running bash, and no agent-driving region in flight. */
+	waitForSettled(): Promise<void>;
 
 	/** Start a new session, optionally with initialization. */
 	newSession(options?: {
@@ -1555,6 +1558,7 @@ export interface ExtensionContextActions {
  */
 export interface ExtensionCommandContextActions {
 	waitForIdle: () => Promise<void>;
+	waitForSettled: () => Promise<void>;
 	newSession: (options?: {
 		parentSession?: string;
 		setup?: (sessionManager: SessionManager) => Promise<void>;

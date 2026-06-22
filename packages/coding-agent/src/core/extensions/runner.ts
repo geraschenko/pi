@@ -273,6 +273,7 @@ export class ExtensionRunner {
 	private isProjectTrustedFn: () => boolean = () => true;
 	private getSignalFn: () => AbortSignal | undefined = () => undefined;
 	private waitForIdleFn: () => Promise<void> = async () => {};
+	private waitForSettledFn: () => Promise<void> = async () => {};
 	private abortFn: () => void = () => {};
 	private hasPendingMessagesFn: () => boolean = () => false;
 	private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
@@ -381,6 +382,7 @@ export class ExtensionRunner {
 	bindCommandContext(actions?: ExtensionCommandContextActions): void {
 		if (actions) {
 			this.waitForIdleFn = actions.waitForIdle;
+			this.waitForSettledFn = actions.waitForSettled;
 			this.newSessionHandler = actions.newSession;
 			this.forkHandler = actions.fork;
 			this.navigateTreeHandler = actions.navigateTree;
@@ -390,6 +392,7 @@ export class ExtensionRunner {
 		}
 
 		this.waitForIdleFn = async () => {};
+		this.waitForSettledFn = async () => {};
 		this.newSessionHandler = async () => ({ cancelled: false });
 		this.forkHandler = async () => ({ cancelled: false });
 		this.navigateTreeHandler = async () => ({ cancelled: false });
@@ -700,6 +703,10 @@ export class ExtensionRunner {
 		context.waitForIdle = () => {
 			this.assertActive();
 			return this.waitForIdleFn();
+		};
+		context.waitForSettled = () => {
+			this.assertActive();
+			return this.waitForSettledFn();
 		};
 		context.newSession = (options) => {
 			this.assertActive();

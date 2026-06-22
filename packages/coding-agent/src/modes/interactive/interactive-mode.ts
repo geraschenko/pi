@@ -1548,6 +1548,7 @@ export class InteractiveMode {
 			},
 			commandContextActions: {
 				waitForIdle: () => this.session.agent.waitForIdle(),
+				waitForSettled: () => this.session.waitForSettled(),
 				newSession: async (options) => {
 					if (this.loadingAnimation) {
 						this.loadingAnimation.stop();

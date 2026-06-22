@@ -1048,7 +1048,7 @@ This reports the current base prompt inputs. It does not include per-turn `befor
 
 ### ctx.waitForIdle()
 
-Wait for the agent to finish streaming:
+Wait for the agent to finish streaming (a single run):
 
 ```typescript
 pi.registerCommand("my-cmd", {
@@ -1058,6 +1058,33 @@ pi.registerCommand("my-cmd", {
   },
 });
 ```
+
+`waitForIdle()` resolves at the end of one agent run. It does **not** wait
+through an auto-retry backoff (the run has already ended while the session waits
+to retry a transient error), and it resolves immediately during compaction
+(there is no active run while history is being rewritten). Use
+`ctx.waitForSettled()` when you need the session to be fully idle.
+
+### ctx.waitForSettled()
+
+Wait until no session driver is active — not streaming, not in a retry backoff,
+not compacting (auto, manual, or branch summary), not running a bash command, and
+no agent-driving region in flight:
+
+```typescript
+pi.registerCommand("my-cmd", {
+  handler: async (args, ctx) => {
+    await ctx.waitForSettled();
+    // The session is fully settled: no run, retry, compaction, or bash pending.
+  },
+});
+```
+
+Unlike `waitForIdle()`, this waits through retry backoff and compaction. Do not
+`await` it inline from a handler whose completion the active run is waiting on
+(e.g. a command handler that blocks `prompt()`): the run cannot settle until the
+handler returns, so awaiting it there deadlocks the turn. Detach first (e.g.
+`void (async () => { await ctx.waitForSettled(); ... })()`).
 
 ### ctx.newSession(options?)
 
