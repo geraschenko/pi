@@ -896,6 +896,7 @@ describe("ExtensionRunner", () => {
 
 			runner.bindCommandContext({
 				waitForIdle: async () => {},
+				waitForSettled: async () => {},
 				newSession: async () => ({ cancelled: false }),
 				fork,
 				navigateTree: async () => ({ cancelled: false }),

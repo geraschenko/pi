@@ -1644,6 +1644,7 @@ export class InteractiveMode {
 			},
 			commandContextActions: {
 				waitForIdle: () => this.session.waitForIdle(),
+				waitForSettled: () => this.session.waitForSettled(),
 				newSession: async (options) => {
 					this.clearStatusIndicator();
 					try {

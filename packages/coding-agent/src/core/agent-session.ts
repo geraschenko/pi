@@ -309,6 +309,14 @@ export class AgentSession {
 	private _bashAbortController: AbortController | undefined = undefined;
 	private _pendingBashMessages: BashExecutionMessage[] = [];
 
+	// Settlement state. _driverDepth counts in-flight agent-driving regions —
+	// there are exactly two (_runAgentPrompt and the pre-prompt compaction block
+	// in prompt()), the only places that call agent.prompt()/agent.continue().
+	// A counter, not a boolean, so overlapping/nested regions settle only when
+	// the last one unwinds.
+	private _driverDepth = 0;
+	private _settleWaiters: Array<() => void> = [];
+
 	// Extension system
 	private _extensionRunner!: ExtensionRunner;
 	private _turnIndex = 0;
@@ -1026,8 +1034,58 @@ export class AgentSession {
 	// Prompting
 	// =========================================================================
 
+	/**
+	 * No session driver is currently active.
+	 *  - _driverDepth === 0 — no agent-driving region in flight. This alone implies
+	 *    !isStreaming and !isRetrying (all streaming/backoff happens inside one of
+	 *    the two bracketed regions); the flags are kept as defense-in-depth so a
+	 *    future un-bracketed agent.continue() can't silently break settlement, and
+	 *    as the cross-driver-race backstop (a non-agent driver — manual compact() /
+	 *    branch summary — finishing and calling the resolver at the synchronous
+	 *    instant a bracketed region sits between run-end and retry-setup).
+	 *  - isCompacting — any of the three compaction/branch-summary controllers is
+	 *    set (auto pre-prompt OR turn-triggered, manual compact(), branch summary).
+	 *  - isRetrying — inside _prepareRetry's backoff sleep.
+	 *  - isBashRunning — a bash command (incl. standalone RPC bash) is executing.
+	 */
+	private get _isSettled(): boolean {
+		return (
+			this._driverDepth === 0 && !this.isStreaming && !this.isCompacting && !this.isRetrying && !this.isBashRunning
+		);
+	}
+
+	/**
+	 * Resolve all settle waiters iff settled. Idempotent; safe to call from any
+	 * driver's exit path. A no-op when anything is still running.
+	 */
+	private _maybeResolveSettled(): void {
+		if (!this._isSettled) return;
+		const waiters = this._settleWaiters;
+		this._settleWaiters = [];
+		for (const resolve of waiters) resolve();
+	}
+
+	/**
+	 * Resolve when no session driver is currently active: no agent-driving region
+	 * in flight, not streaming, not compacting (auto/manual/branch-summary), not in
+	 * a retry backoff, no bash running. Resolves immediately if already settled.
+	 *
+	 * Unlike Agent.waitForIdle(), which resolves at the end of a single agent run
+	 * (and resolves immediately during compaction, when there is no active run),
+	 * this waits for the session to be idle across all of its drivers. It reflects
+	 * drivers active *now*; it does not span work queued later in the same prompt()
+	 * preflight.
+	 */
+	waitForSettled(): Promise<void> {
+		if (this._isSettled) return Promise.resolve();
+		return new Promise((resolve) => {
+			this._settleWaiters.push(resolve);
+		});
+	}
+
 	private async _runAgentPrompt(messages: AgentMessage | AgentMessage[]): Promise<void> {
 		this._isAgentRunActive = true;
+		this._driverDepth++;
 		try {
 			await this.agent.prompt(messages);
 			while (await this._handlePostAgentRun()) {
@@ -1035,8 +1093,13 @@ export class AgentSession {
 			}
 		} finally {
 			this._systemPromptOverride = undefined;
-			this._flushPendingBashMessages();
-			await this._emitAgentSettled();
+			try {
+				this._flushPendingBashMessages();
+				await this._emitAgentSettled();
+			} finally {
+				this._driverDepth--;
+				this._maybeResolveSettled();
+			}
 		}
 	}
 
@@ -1161,9 +1224,17 @@ export class AgentSession {
 
 			// Check if we need to compact before sending (catches aborted responses).
 			// The user's new prompt is sent below, so do not call agent.continue() here.
-			const lastAssistant = this._findLastAssistantMessage();
-			if (lastAssistant) {
-				await this._checkCompaction(lastAssistant, false);
+			// Bracket the compaction check so waitForSettled cannot observe an
+			// all-flags-false gap while auto-compaction starts and finishes.
+			this._driverDepth++;
+			try {
+				const lastAssistant = this._findLastAssistantMessage();
+				if (lastAssistant) {
+					await this._checkCompaction(lastAssistant, false);
+				}
+			} finally {
+				this._driverDepth--;
+				this._maybeResolveSettled();
 			}
 
 			// Build messages array (custom message if any, then user message)
@@ -1741,11 +1812,18 @@ export class AgentSession {
 	 */
 	async compact(customInstructions?: string): Promise<CompactionResult> {
 		this._disconnectFromAgent();
-		await this.abort();
+		// Set the compaction controller (and emit compaction_start) before aborting:
+		// abort() unwinds any in-flight _runAgentPrompt, whose finally calls
+		// _maybeResolveSettled(); having isCompacting already true prevents a
+		// premature settle in the window after abort() resolves. abort() itself does
+		// not touch the compaction controllers (it only aborts retry + agent run), so
+		// the freshly-set controller survives. The abort() is inside the
+		// controller-clearing try/finally so an abort() throw can't strand it.
 		this._compactionAbortController = new AbortController();
 		this._emit({ type: "compaction_start", reason: "manual" });
 
 		try {
+			await this.abort();
 			if (!this.model) {
 				throw new Error(formatNoModelSelectedMessage());
 			}
@@ -1874,6 +1952,7 @@ export class AgentSession {
 		} finally {
 			this._compactionAbortController = undefined;
 			this._reconnectToAgent();
+			this._maybeResolveSettled();
 		}
 	}
 
@@ -2028,8 +2107,10 @@ export class AgentSession {
 				return false;
 			}
 
-			this._emit({ type: "compaction_start", reason });
+			// Set the controller before emitting compaction_start so isCompacting is
+			// true during compaction_start listeners.
 			this._autoCompactionAbortController = new AbortController();
+			this._emit({ type: "compaction_start", reason });
 			started = true;
 
 			let extensionCompaction: CompactionResult | undefined;
@@ -2705,6 +2786,7 @@ export class AgentSession {
 			return result;
 		} finally {
 			this._bashAbortController = undefined;
+			this._maybeResolveSettled();
 		}
 	}
 
@@ -3001,6 +3083,7 @@ export class AgentSession {
 			return { editorText, cancelled: false, summaryEntry };
 		} finally {
 			this._branchSummaryAbortController = undefined;
+			this._maybeResolveSettled();
 		}
 	}
 
