@@ -343,15 +343,15 @@ export interface RpcSocketUiWaitEndEvent {
 }
 
 /**
- * Identifies the session this process is hosting. Sent to each client right
- * after the hello record, and broadcast whenever the active session is
- * replaced (/new, /resume, fork, clone, import). `sessionFile` is omitted for
+ * Carries the full state of the session this process is hosting. Sent to each
+ * client right after the hello record, and broadcast whenever the active
+ * session is replaced (/new, /resume, fork, clone, import). Serves as the
+ * seed for `nextSessionState` folding; `state.sessionFile` is omitted for
  * in-memory sessions.
  */
 export interface RpcSocketSessionChangedEvent {
 	type: "session_changed";
-	sessionFile?: string;
-	sessionId: string;
+	state: RpcSessionState;
 }
 
 export interface RpcExtensionErrorEvent {

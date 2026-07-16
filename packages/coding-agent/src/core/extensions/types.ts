@@ -793,6 +793,28 @@ export interface ThinkingLevelSelectEvent {
 }
 
 // ============================================================================
+// Queue Mode / Compaction Setting Events
+// ============================================================================
+
+/** Fired when the steering message mode changes */
+export interface SteeringModeChangedEvent {
+	type: "steering_mode_changed";
+	mode: "all" | "one-at-a-time";
+}
+
+/** Fired when the follow-up message mode changes */
+export interface FollowUpModeChangedEvent {
+	type: "follow_up_mode_changed";
+	mode: "all" | "one-at-a-time";
+}
+
+/** Fired when the auto-compaction setting changes */
+export interface AutoCompactionChangedEvent {
+	type: "auto_compaction_changed";
+	enabled: boolean;
+}
+
+// ============================================================================
 // User Bash Events
 // ============================================================================
 
@@ -1038,6 +1060,9 @@ export type ExtensionEvent =
 	| ToolExecutionEndEvent
 	| ModelSelectEvent
 	| ThinkingLevelSelectEvent
+	| SteeringModeChangedEvent
+	| FollowUpModeChangedEvent
+	| AutoCompactionChangedEvent
 	| UserBashEvent
 	| InputEvent
 	| ToolCallEvent
@@ -1206,6 +1231,9 @@ export interface ExtensionAPI {
 	on(event: "tool_execution_end", handler: ExtensionHandler<ToolExecutionEndEvent>): void;
 	on(event: "model_select", handler: ExtensionHandler<ModelSelectEvent>): void;
 	on(event: "thinking_level_select", handler: ExtensionHandler<ThinkingLevelSelectEvent>): void;
+	on(event: "steering_mode_changed", handler: ExtensionHandler<SteeringModeChangedEvent>): void;
+	on(event: "follow_up_mode_changed", handler: ExtensionHandler<FollowUpModeChangedEvent>): void;
+	on(event: "auto_compaction_changed", handler: ExtensionHandler<AutoCompactionChangedEvent>): void;
 	on(event: "tool_call", handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>): void;
 	on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): void;
 	on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): void;
