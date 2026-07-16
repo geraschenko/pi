@@ -11,10 +11,12 @@ export {
 	resolveAndValidateRpcSocketPath,
 	runRpcSocketServer,
 } from "./rpc/rpc-socket-mode.ts";
+export { buildRpcSessionState, nextSessionState } from "./rpc/rpc-state-fold.ts";
 export type {
 	RpcCommand,
 	RpcExtensionUIRequest,
 	RpcExtensionUIResponse,
 	RpcResponse,
 	RpcSessionState,
+	RpcSocketBroadcastEvent,
 } from "./rpc/rpc-types.ts";

@@ -3191,6 +3191,11 @@ export class InteractiveMode {
 				break;
 
 			case "compaction_start": {
+				// Branch summarization manages its own indicator and escape
+				// handler in the tree-navigation flow.
+				if (event.reason === "branch-summary") {
+					break;
+				}
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(true);
 				}
@@ -3205,6 +3210,9 @@ export class InteractiveMode {
 			}
 
 			case "compaction_end": {
+				if (event.reason === "branch-summary") {
+					break;
+				}
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}

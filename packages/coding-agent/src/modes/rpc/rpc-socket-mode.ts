@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
 import { executeRpcCommand, rpcError } from "./rpc-command-handler.ts";
+import { buildRpcSessionState } from "./rpc-state-fold.ts";
 import type {
 	RpcCommand,
 	RpcResponse,
@@ -189,8 +190,7 @@ export async function runRpcSocketServer(
 
 	const sessionChangedEvent = (): RpcSocketSessionChangedEvent => ({
 		type: "session_changed",
-		sessionFile: session.sessionFile,
-		sessionId: session.sessionId,
+		state: buildRpcSessionState(session),
 	});
 
 	const server = createServer((socket) => {

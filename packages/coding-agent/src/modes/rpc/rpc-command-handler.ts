@@ -1,7 +1,8 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { processImage } from "../../utils/image-process.ts";
-import type { RpcCommand, RpcResponse, RpcSessionState, RpcSlashCommand } from "./rpc-types.ts";
+import { buildRpcSessionState } from "./rpc-state-fold.ts";
+import type { RpcCommand, RpcResponse, RpcSlashCommand } from "./rpc-types.ts";
 
 export interface RpcMessageWithImages {
 	message: string;
@@ -129,21 +130,7 @@ export async function executeRpcCommand(options: ExecuteRpcCommandOptions): Prom
 		}
 
 		case "get_state": {
-			const state: RpcSessionState = {
-				model: session.model,
-				thinkingLevel: session.thinkingLevel,
-				isStreaming: session.isStreaming,
-				isCompacting: session.isCompacting,
-				steeringMode: session.steeringMode,
-				followUpMode: session.followUpMode,
-				sessionFile: session.sessionFile,
-				sessionId: session.sessionId,
-				sessionName: session.sessionName,
-				autoCompactionEnabled: session.autoCompactionEnabled,
-				messageCount: session.messages.length,
-				pendingMessageCount: session.pendingMessageCount,
-			};
-			return rpcSuccess(id, "get_state", state);
+			return rpcSuccess(id, "get_state", buildRpcSessionState(session));
 		}
 
 		case "set_model": {
