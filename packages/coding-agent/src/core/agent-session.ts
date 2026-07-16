@@ -174,8 +174,12 @@ export type AgentSessionEvent =
 			steering: readonly string[];
 			followUp: readonly string[];
 	  }
-	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" | "branch-summary" }
 	| { type: "entry_appended"; entry: SessionEntry }
+	| { type: "model_changed"; model: Model<any> }
+	| { type: "steering_mode_changed"; mode: "all" | "one-at-a-time" }
+	| { type: "follow_up_mode_changed"; mode: "all" | "one-at-a-time" }
+	| { type: "auto_compaction_changed"; enabled: boolean }
 	| {
 			type: "tree_navigated";
 			oldLeafId: string | null;
@@ -186,7 +190,7 @@ export type AgentSessionEvent =
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
 	| {
 			type: "compaction_end";
-			reason: "manual" | "threshold" | "overflow";
+			reason: "manual" | "threshold" | "overflow" | "branch-summary";
 			result: CompactionResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;
@@ -2107,6 +2111,7 @@ export class AgentSession {
 		source: "set" | "cycle" | "restore",
 	): Promise<void> {
 		if (modelsAreEqual(previousModel, nextModel)) return;
+		this._emit({ type: "model_changed", model: nextModel });
 		await this._extensionRunner.emit({
 			type: "model_select",
 			model: nextModel,
@@ -2336,8 +2341,22 @@ export class AgentSession {
 	// =========================================================================
 
 	private syncQueueModesFromSettings(): void {
-		this.agent.steeringMode = this.settingsManager.getSteeringMode();
-		this.agent.followUpMode = this.settingsManager.getFollowUpMode();
+		this._applySteeringMode(this.settingsManager.getSteeringMode());
+		this._applyFollowUpMode(this.settingsManager.getFollowUpMode());
+	}
+
+	private _applySteeringMode(mode: "all" | "one-at-a-time"): void {
+		if (this.agent.steeringMode === mode) return;
+		this.agent.steeringMode = mode;
+		this._emit({ type: "steering_mode_changed", mode });
+		void this._extensionRunner.emit({ type: "steering_mode_changed", mode });
+	}
+
+	private _applyFollowUpMode(mode: "all" | "one-at-a-time"): void {
+		if (this.agent.followUpMode === mode) return;
+		this.agent.followUpMode = mode;
+		this._emit({ type: "follow_up_mode_changed", mode });
+		void this._extensionRunner.emit({ type: "follow_up_mode_changed", mode });
 	}
 
 	/**
@@ -2345,7 +2364,7 @@ export class AgentSession {
 	 * Saves to settings.
 	 */
 	setSteeringMode(mode: "all" | "one-at-a-time"): void {
-		this.agent.steeringMode = mode;
+		this._applySteeringMode(mode);
 		this.settingsManager.setSteeringMode(mode);
 	}
 
@@ -2354,7 +2373,7 @@ export class AgentSession {
 	 * Saves to settings.
 	 */
 	setFollowUpMode(mode: "all" | "one-at-a-time"): void {
-		this.agent.followUpMode = mode;
+		this._applyFollowUpMode(mode);
 		this.settingsManager.setFollowUpMode(mode);
 	}
 
@@ -2914,7 +2933,16 @@ export class AgentSession {
 	 * Toggle auto-compaction setting.
 	 */
 	setAutoCompactionEnabled(enabled: boolean): void {
+		const changed = this.autoCompactionEnabled !== enabled;
 		this.settingsManager.setCompactionEnabled(enabled);
+		if (changed) {
+			this._emitAutoCompactionChanged(enabled);
+		}
+	}
+
+	private _emitAutoCompactionChanged(enabled: boolean): void {
+		this._emit({ type: "auto_compaction_changed", enabled });
+		void this._extensionRunner.emit({ type: "auto_compaction_changed", enabled });
 	}
 
 	/** Whether auto-compaction is enabled */
@@ -3299,8 +3327,8 @@ export class AgentSession {
 		const previousFlagValues = oldRunner.getFlagValues();
 		await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
 		oldRunner.invalidate();
+		const autoCompactionBefore = this.autoCompactionEnabled;
 		await this.settingsManager.reload();
-		this.syncQueueModesFromSettings();
 		resetApiProviders();
 		await this._resourceLoader.reload();
 		this._buildRuntime({
@@ -3308,6 +3336,10 @@ export class AgentSession {
 			flagValues: previousFlagValues,
 			includeAllExtensionTools: true,
 		});
+		this.syncQueueModesFromSettings();
+		if (this.autoCompactionEnabled !== autoCompactionBefore) {
+			this._emitAutoCompactionChanged(this.autoCompactionEnabled);
+		}
 
 		const hasBindings =
 			this._extensionUIContext ||
@@ -3642,6 +3674,10 @@ export class AgentSession {
 
 		// Set up abort controller for summarization
 		this._branchSummaryAbortController = new AbortController();
+		const emitCompactionEvents = (options.summarize ?? false) && entriesToSummarize.length > 0;
+		if (emitCompactionEvents) {
+			this._emit({ type: "compaction_start", reason: "branch-summary" });
+		}
 
 		try {
 			let extensionSummary: { summary: string; details?: unknown; usage?: Usage } | undefined;
@@ -3787,6 +3823,15 @@ export class AgentSession {
 
 			return { editorText, cancelled: false, summaryEntry };
 		} finally {
+			if (emitCompactionEvents) {
+				this._emit({
+					type: "compaction_end",
+					reason: "branch-summary",
+					result: undefined,
+					aborted: this._branchSummaryAbortController.signal.aborted,
+					willRetry: false,
+				});
+			}
 			this._branchSummaryAbortController = undefined;
 			this._resolveIdleWaitIfIdle();
 		}

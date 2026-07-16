@@ -121,6 +121,24 @@ A `user_bash` handler that returns `undefined` passes the command to the next ha
 <a id="custom-tools"></a>
 <a id="register-tools"></a>
 
+### Queue Mode and Compaction Setting Events
+
+These notification-only events fire when a value changes through a session setter or settings reload. Handler return values are ignored.
+
+```typescript
+pi.on("steering_mode_changed", async (event, ctx) => {
+  // event.mode: "all" | "one-at-a-time"
+});
+
+pi.on("follow_up_mode_changed", async (event, ctx) => {
+  // event.mode: "all" | "one-at-a-time"
+});
+
+pi.on("auto_compaction_changed", async (event, ctx) => {
+  // event.enabled: boolean
+});
+```
+
 ### Tools
 
 A custom tool defines a name, model-facing description, TypeBox parameter schema, and `execute()` function.

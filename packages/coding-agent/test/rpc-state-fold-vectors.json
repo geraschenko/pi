@@ -1,0 +1,155 @@
+{
+  "description": "Shared test vectors for nextSessionState. Each vector is {name, state, event, expected}. Consumed by the TS fold tests here and by downstream ports of the fold to prove equivalence. Model objects are abbreviated to {provider, id} — the fold only compares those fields.",
+  "baseState": {
+    "model": { "provider": "anthropic", "id": "claude-sonnet-4-5" },
+    "thinkingLevel": "off",
+    "isStreaming": false,
+    "isCompacting": false,
+    "steeringMode": "one-at-a-time",
+    "followUpMode": "one-at-a-time",
+    "sessionFile": "/tmp/session.jsonl",
+    "sessionId": "session-1",
+    "sessionName": "my session",
+    "autoCompactionEnabled": true,
+    "messageCount": 4,
+    "pendingMessageCount": 0
+  },
+  "vectors": [
+    {
+      "name": "agent_start sets isStreaming",
+      "event": { "type": "agent_start" },
+      "expected": { "isStreaming": true }
+    },
+    {
+      "name": "agent_settled clears isStreaming",
+      "state": { "isStreaming": true },
+      "event": { "type": "agent_settled" },
+      "expected": { "isStreaming": false }
+    },
+    {
+      "name": "agent_end is ignored even with willRetry false",
+      "state": { "isStreaming": true },
+      "event": { "type": "agent_end", "messages": [], "willRetry": false },
+      "expected": {}
+    },
+    {
+      "name": "agent_end is ignored mid-retry",
+      "state": { "isStreaming": true },
+      "event": { "type": "agent_end", "messages": [], "willRetry": true },
+      "expected": {}
+    },
+    {
+      "name": "model_changed replaces model",
+      "event": { "type": "model_changed", "model": { "provider": "anthropic", "id": "claude-opus-4-1" } },
+      "expected": { "model": { "provider": "anthropic", "id": "claude-opus-4-1" } }
+    },
+    {
+      "name": "model_changed with same provider and id changes nothing",
+      "event": { "type": "model_changed", "model": { "provider": "anthropic", "id": "claude-sonnet-4-5" } },
+      "expected": {}
+    },
+    {
+      "name": "thinking_level_changed replaces thinkingLevel",
+      "event": { "type": "thinking_level_changed", "level": "high" },
+      "expected": { "thinkingLevel": "high" }
+    },
+    {
+      "name": "session_info_changed replaces sessionName",
+      "event": { "type": "session_info_changed", "name": "renamed" },
+      "expected": { "sessionName": "renamed" }
+    },
+    {
+      "name": "session_info_changed clears sessionName on undefined",
+      "event": { "type": "session_info_changed" },
+      "expected": { "sessionName": null }
+    },
+    {
+      "name": "session_changed replaces the entire state",
+      "event": {
+        "type": "session_changed",
+        "state": {
+          "model": { "provider": "anthropic", "id": "claude-opus-4-1" },
+          "thinkingLevel": "low",
+          "isStreaming": false,
+          "isCompacting": false,
+          "steeringMode": "all",
+          "followUpMode": "all",
+          "sessionId": "session-2",
+          "autoCompactionEnabled": false,
+          "messageCount": 0,
+          "pendingMessageCount": 0
+        }
+      },
+      "expectedFullState": {
+        "model": { "provider": "anthropic", "id": "claude-opus-4-1" },
+        "thinkingLevel": "low",
+        "isStreaming": false,
+        "isCompacting": false,
+        "steeringMode": "all",
+        "followUpMode": "all",
+        "sessionId": "session-2",
+        "autoCompactionEnabled": false,
+        "messageCount": 0,
+        "pendingMessageCount": 0
+      }
+    },
+    {
+      "name": "queue_update sets pendingMessageCount from array lengths",
+      "event": { "type": "queue_update", "steering": ["a", "b"], "followUp": ["c"] },
+      "expected": { "pendingMessageCount": 3 }
+    },
+    {
+      "name": "queue_update with empty arrays clears pendingMessageCount",
+      "state": { "pendingMessageCount": 2 },
+      "event": { "type": "queue_update", "steering": [], "followUp": [] },
+      "expected": { "pendingMessageCount": 0 }
+    },
+    {
+      "name": "compaction_start sets isCompacting",
+      "event": { "type": "compaction_start", "reason": "threshold" },
+      "expected": { "isCompacting": true }
+    },
+    {
+      "name": "compaction_start with branch-summary reason sets isCompacting",
+      "event": { "type": "compaction_start", "reason": "branch-summary" },
+      "expected": { "isCompacting": true }
+    },
+    {
+      "name": "compaction_end clears isCompacting",
+      "state": { "isCompacting": true },
+      "event": { "type": "compaction_end", "reason": "manual", "aborted": false, "willRetry": false },
+      "expected": { "isCompacting": false }
+    },
+    {
+      "name": "unpaired compaction_end is a no-op when not compacting",
+      "event": { "type": "compaction_end", "reason": "overflow", "aborted": false, "willRetry": false },
+      "expected": {}
+    },
+    {
+      "name": "steering_mode_changed replaces steeringMode",
+      "event": { "type": "steering_mode_changed", "mode": "all" },
+      "expected": { "steeringMode": "all" }
+    },
+    {
+      "name": "follow_up_mode_changed replaces followUpMode",
+      "event": { "type": "follow_up_mode_changed", "mode": "all" },
+      "expected": { "followUpMode": "all" }
+    },
+    {
+      "name": "auto_compaction_changed replaces autoCompactionEnabled",
+      "event": { "type": "auto_compaction_changed", "enabled": false },
+      "expected": { "autoCompactionEnabled": false }
+    },
+    {
+      "name": "unrelated events change nothing",
+      "event": { "type": "turn_start" },
+      "expected": {}
+    },
+    {
+      "name": "re-applying an event already reflected in the seed is idempotent",
+      "state": { "thinkingLevel": "high" },
+      "event": { "type": "thinking_level_changed", "level": "high" },
+      "expected": {}
+    }
+  ]
+}
