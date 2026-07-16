@@ -57,6 +57,7 @@ export type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	AppKeybinding,
+	AutoCompactionChangedEvent,
 	AutocompleteProviderFactory,
 	BashToolCallEvent,
 	BeforeAgentStartEvent,
@@ -92,6 +93,7 @@ export type {
 	ExtensionUIDialogOptions,
 	ExtensionWidgetOptions,
 	FindToolCallEvent,
+	FollowUpModeChangedEvent,
 	GrepToolCallEvent,
 	InlineExtension,
 	InputEvent,
@@ -130,6 +132,7 @@ export type {
 	SlashCommandInfo,
 	SlashCommandSource,
 	SourceInfo,
+	SteeringModeChangedEvent,
 	TerminalInputHandler,
 	ToolCallEvent,
 	ToolCallEventResult,
@@ -333,10 +336,12 @@ export {
 export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
 export {
+	buildRpcSessionState,
 	InteractiveMode,
 	type InteractiveModeOptions,
 	type JsonAgentSessionEvent,
 	type ModelInfo,
+	nextSessionState,
 	type PrintModeOptions,
 	RpcClient,
 	type RpcClientOptions,
@@ -346,6 +351,7 @@ export {
 	type RpcExtensionUIResponse,
 	type RpcResponse,
 	type RpcSessionState,
+	type RpcSocketBroadcastEvent,
 	runPrintMode,
 	runRpcMode,
 } from "./modes/index.ts";

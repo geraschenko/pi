@@ -238,15 +238,18 @@ Behavioral requirements:
 Add a socket-only event announcing which session the process is hosting:
 
 ```json
-{"type":"session_changed","sessionFile":"/abs/path/to/session.jsonl","sessionId":"<id>"}
+{"type":"session_changed","state":{"sessionId":"<id>","sessionFile":"/abs/path/to/session.jsonl","...":"full RpcSessionState"}}
 ```
 
 Why this event exists: tee mode introduces external observers of a session whose identity can change underneath them. The active session is replaced when the human runs `/new` or `/resume` in the TUI, or when any client sends `new_session` / `switch_session` / `fork` / `clone` over the socket. Responses to those commands go only to the issuing connection, and TUI-initiated replacements produce no socket traffic at all. Orchestrators (e.g. holder daemons that must durably record the current session file so a dormant agent can later be revived with `pi --session <path>`) would otherwise have to poll `get_state` on every broadcast event, which is impractical since events fire per streamed token. Before tee mode there was no external observer, so no such event was needed.
 
 Payload contract:
 
-- `sessionId: string` is required.
-- `sessionFile` is the absolute path of the session file. It is omitted for in-memory (non-persisted) sessions, matching `RpcSessionState.sessionFile`.
+- `state` is the complete `RpcSessionState` of the hosted session — the same
+  object `get_state` returns — so the event doubles as the seed for
+  `nextSessionState` folding (see `docs/rpc-state-fold-spec.md`).
+- `state.sessionId: string` is required.
+- `state.sessionFile` is the absolute path of the session file. It is omitted for in-memory (non-persisted) sessions.
 
 Behavioral requirements:
 
