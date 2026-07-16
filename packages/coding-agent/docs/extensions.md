@@ -755,6 +755,34 @@ pi.on("thinking_level_select", async (event, ctx) => {
 
 Use this to update extension UI when `pi.setThinkingLevel()`, model changes, or built-in thinking-level controls change the active thinking level.
 
+### Queue Mode and Compaction Setting Events
+
+All three are notification-only; handler return values are ignored. They fire only when the value actually changes, whether via the session setters or a settings reload.
+
+#### steering_mode_changed
+
+```typescript
+pi.on("steering_mode_changed", async (event, ctx) => {
+  // event.mode - "all" | "one-at-a-time"
+});
+```
+
+#### follow_up_mode_changed
+
+```typescript
+pi.on("follow_up_mode_changed", async (event, ctx) => {
+  // event.mode - "all" | "one-at-a-time"
+});
+```
+
+#### auto_compaction_changed
+
+```typescript
+pi.on("auto_compaction_changed", async (event, ctx) => {
+  // event.enabled - whether auto-compaction is enabled
+});
+```
+
 ### Tool Events
 
 #### tool_call
